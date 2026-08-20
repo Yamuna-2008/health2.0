@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartHealth
+     | Smart Health Monitoring System</title>
+<meta name="description" content="Track vitals, analyze health status and keep a running record — all in your browser.">
+
+<!-- Google Fonts: Space Mono for vital readouts, Plus Jakarta Sans for UI text -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- jsPDF for "Download report as PDF" -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="light">
+
+  <!-- ===================== HEADER / SIGNATURE ECG STRIP ===================== -->
+  <header class="topbar">
+    <div class="topbar__brand">
+      <span class="topbar__logo">SmartHealth</span>
+      <span class="topbar__tag">Smart Health Monitoring</span>
+    </div>
+
+    <!-- Signature element: live ECG trace that beats according to the last recorded heart rate -->
+    <div class="ecg" id="ecgStrip" aria-hidden="true">
+      <svg class="ecg__svg" viewBox="0 0 600 60" preserveAspectRatio="none">
+        <polyline id="ecgLine" class="ecg__line" fill="none" stroke-width="2"
+          points="0,30 40,30 55,30 65,8 75,52 85,30 100,30 140,30 155,30 165,8 175,52 185,30 200,30
+                  240,30 255,30 265,8 275,52 285,30 300,30 340,30 355,30 365,8 375,52 385,30 400,30
+                  440,30 455,30 465,8 475,52 485,30 500,30 540,30 555,30 565,8 575,52 585,30 600,30"/>
+      </svg>
+    </div>
+
+    <div class="topbar__brand">
+    <img src="logo.png" alt="Health2.0 Logo" class="logo">
+</div>
+
+  </header>
+
+  <main class="dashboard">
+
+    <!-- ===================== LEFT: PATIENT INTAKE FORM ===================== -->
+    <section class="panel intake-panel" aria-labelledby="intakeTitle">
+      <h2 id="intakeTitle" class="panel__title"><span class="panel__num">01</span> Patient Intake</h2>
+
+      <form id="healthForm" novalidate>
+        <div class="field-row">
+          <div class="field">
+            <label for="name">Patient name</label>
+            <input type="text" id="name" placeholder="e.g. Asha Rao" autocomplete="name">
+            <span class="field__error" id="err-name"></span>
+          </div>
+          <div class="field field--small">
+            <label for="age">Age</label>
+            <input type="number" id="age" placeholder="Years" min="1" max="120">
+            <span class="field__error" id="err-age"></span>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field field--small">
+            <label for="height">Height (cm)</label>
+            <input type="number" id="height" placeholder="e.g. 170" min="50" max="250">
+            <span class="field__error" id="err-height"></span>
+          </div>
+          <div class="field field--small">
+            <label for="weight">Weight (kg)</label>
+            <input type="number" id="weight" placeholder="e.g. 65" min="10" max="400">
+            <span class="field__error" id="err-weight"></span>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field field--small">
+            <label for="bloodSugar">Blood sugar <small>(mg/dL, fasting)</small></label>
+            <input type="number" id="bloodSugar" placeholder="e.g. 90" min="0">
+            <span class="field__hint">Normal: 70–100</span>
+            <span class="field__error" id="err-bloodSugar"></span>
+          </div>
+          <div class="field field--small">
+            <label for="heartRate">Heart rate <small>(bpm)</small></label>
+            <input type="number" id="heartRate" placeholder="e.g. 72" min="0">
+            <span class="field__hint">Normal: 60–100</span>
+            <span class="field__error" id="err-heartRate"></span>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field field--small">
+            <label for="bpSystolic">BP systolic <small>(mmHg)</small></label>
+            <input type="number" id="bpSystolic" placeholder="e.g. 118" min="0">
+            <span class="field__hint">Normal: 90–120</span>
+            <span class="field__error" id="err-bpSystolic"></span>
+          </div>
+          <div class="field field--small">
+            <label for="bpDiastolic">BP diastolic <small>(mmHg)</small></label>
+            <input type="number" id="bpDiastolic" placeholder="e.g. 78" min="0">
+            <span class="field__hint">Normal: 60–80</span>
+            <span class="field__error" id="err-bpDiastolic"></span>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button type="submit" class="btn btn--primary" id="analyzeBtn">
+            <span>Analyze health</span>
+          </button>
+          <button type="button" class="btn btn--ghost" id="resetBtn">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===================== RIGHT: VITALS MONITOR + ANALYSIS ===================== -->
+    <section class="panel monitor-panel" aria-labelledby="monitorTitle">
+      <h2 id="monitorTitle" class="panel__title"><span class="panel__num">02</span> Vitals Monitor</h2>
+
+      <div class="monitor-grid" id="monitorGrid">
+        <div class="vital-card" data-vital="bmi">
+          <span class="vital-card__label">BMI</span>
+          <span class="vital-card__value" id="vBmi">—</span>
+          <span class="vital-card__status" id="vBmiStatus">awaiting data</span>
+        </div>
+        <div class="vital-card" data-vital="sugar">
+          <span class="vital-card__label">Blood sugar</span>
+          <span class="vital-card__value" id="vSugar">—</span>
+          <span class="vital-card__status" id="vSugarStatus">awaiting data</span>
+        </div>
+        <div class="vital-card" data-vital="hr">
+          <span class="vital-card__label">Heart rate</span>
+          <span class="vital-card__value" id="vHr">—</span>
+          <span class="vital-card__status" id="vHrStatus">awaiting data</span>
+        </div>
+        <div class="vital-card" data-vital="bp">
+          <span class="vital-card__label">Blood pressure</span>
+          <span class="vital-card__value" id="vBp">—</span>
+          <span class="vital-card__status" id="vBpStatus">awaiting data</span>
+        </div>
+      </div>
+
+      <div class="analysis" id="analysis">
+        <div class="analysis__badge" id="analysisBadge"></div>
+        <h3 id="analysisHeadline"></h3>
+        <p id="analysisText"></p>
+        <ul class="analysis__notes" id="analysisNotes"></ul>
+        <button class="btn btn--outline" id="downloadPdfBtn" type="button">⬇ Download report (PDF)</button>
+      </div>
+    </section>
+
+    <!-- ===================== RECORDS ===================== -->
+    <section class="panel records-panel" aria-labelledby="recordsTitle">
+      <div class="records-panel__head">
+        <h2 id="recordsTitle" class="panel__title"><span class="panel__num">03</span> Health Records</h2>
+        <div class="records-panel__tools">
+          <input type="search" id="searchRecords" placeholder="Search by name..." aria-label="Search records">
+          <button class="btn btn--danger-ghost" id="clearAllBtn" type="button">Clear all</button>
+        </div>
+      </div>
+
+      <div class="records-table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Patient</th>
+              <th>Age</th>
+              <th>Sugar</th>
+              <th>BP</th>
+              <th>HR</th>
+              <th>BMI</th>
+              <th>Date</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="recordsBody"></tbody>
+        </table>
+        <p class="records-empty" id="recordsEmpty">No records yet — analyze your first reading above.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    <p>SmartHealth runs entirely in your browser. Nothing is uploaded — all records live in this device's local storage.</p>
+  </footer>
+  <section class="health-guide">
+    <h2>🩺 Health Instructions & Diet Tips</h2>
+
+    <div class="guide-card">
+      <h3>🩸 Blood Sugar (Fasting)</h3>
+      <p><strong>Normal:</strong> 70–99 mg/dL</p>
+      <p><strong>Prediabetes:</strong> 100–125 mg/dL</p>
+      <p><strong>Diabetes:</strong> 126 mg/dL or above</p>
+
+      <h4>Diet Tips</h4>
+      <ul>
+        <li>🥗 Eat whole grains, vegetables, and fruits.</li>
+        <li>🚫 Reduce sweets, soft drinks, and sugary foods.</li>
+        <li>💧 Drink enough water every day.</li>
+        <li>🚶 Walk or exercise for at least 30 minutes daily.</li>
+      </ul>
+    </div>
+
+    <div class="guide-card">
+      <h3>❤️ Blood Pressure</h3>
+      <p><strong>Normal:</strong> Below 120/80 mmHg</p>
+      <p><strong>Elevated:</strong> 120–129 / Below 80 mmHg</p>
+      <p><strong>High:</strong> 130/80 mmHg or above</p>
+
+      <h4>Diet Tips</h4>
+      <ul>
+        <li>🧂 Reduce salt intake.</li>
+        <li>🥬 Eat leafy vegetables and fruits.</li>
+        <li>🏃 Exercise regularly.</li>
+        <li>😴 Get 7–9 hours of sleep.</li>
+      </ul>
+    </div>
+
+    <div class="guide-card">
+      <h3>💓 Heart Rate</h3>
+      <p><strong>Normal Resting Rate:</strong> 60–100 bpm</p>
+
+      <h4>Healthy Tips</h4>
+      <ul>
+        <li>❤️ Exercise regularly.</li>
+        <li>💧 Stay hydrated.</li>
+        <li>😌 Reduce stress with relaxation techniques.</li>
+        <li>🚭 Avoid smoking.</li>
+      </ul>
+    </div>
+
+    <div class="guide-card">
+      <h3>⚖️ BMI (Body Mass Index)</h3>
+      <ul>
+        <li>Below 18.5 – Underweight</li>
+        <li>18.5–24.9 – Healthy Weight</li>
+        <li>25–29.9 – Overweight</li>
+        <li>30 and above – Obesity</li>
+      </ul>
+    </div>
+
+    <div class="guide-card">
+      <h3>🥗 Healthy Lifestyle</h3>
+      <ul>
+        <li>🍎 Eat a balanced diet.</li>
+        <li>💧 Drink 2–3 liters of water daily.</li>
+        <li>🚶 Exercise for 30 minutes every day.</li>
+        <li>😴 Sleep 7–9 hours each night.</li>
+        <li>🚭 Avoid smoking and limit alcohol.</li>
+        <li>🩺 Get regular health check-ups.</li>
+      </ul>
+    </div>
+
+    <div class="guide-card warning">
+      <h3>⚠️ Important Note</h3>
+      <p>This application provides health information for educational purposes only. It is not a medical diagnosis. If your readings are consistently abnormal or you feel unwell, consult a qualified healthcare professional.</p>
+    </div>
+  </section>
+
+  <script src="script.js"></script>
+  </body>
+  </html>
